@@ -6,8 +6,9 @@
 #include <ESP8266HTTPClient.h>
 // Librerías adicionales
 #include <math.h>
-#include <arduino-timer.h>
-#include <ArduinoJson.h>
+#include <arduino-timer.h> // https://github.com/contrem/arduino-timer
+#include <ArduinoJson.h>  // https://arduinojson.org/
+#include <WebSocketsClient.h> 
 
 // Sensor temperatura v1.2 Grove
 const int B = 4275;               // B value of the thermistor
@@ -36,13 +37,16 @@ String device="Sensor Temperatura 1";
 // Variable para la temperatura
 int temp;
 
+// Cliente del WiFi
 WiFiClient client;
+// Cliente del WebSocket
+WebSocketsClient webSocket;
 
 
 void setup() {
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
     Serial.begin(115200);
-    
+    Serial.setDebugOutput(true);
     // WiFi.mode(WiFi_STA); // it is a good practice to make sure your code sets wifi mode how you want it.
 
     //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
@@ -74,6 +78,20 @@ void setup() {
    // Se declara el Pin D2 como de salida
    pinMode(pinLed, OUTPUT);
 
+   // Inicia WebSockets
+   // server address, port and URL
+   webSocket.begin("http://iot-rudy.softpak.com.mx",80,"/temperaturaHub/?formatType=pipe");
+   // event handler
+   webSocket.onEvent(webSocketEvent);
+   // try ever 5000 again if connection has failed
+ webSocket.setReconnectInterval(5000);
+  
+  // start heartbeat (optional)
+  // ping server every 15000 ms
+  // expect pong from server within 3000 ms
+  // consider connection disconnected if pong is not received 2 times
+  webSocket.enableHeartbeat(15000, 3000, 2);
+  
    // Timer para enviar al srver la lectura de la temperatura
    timer.every(timeDelayForPostTemperatura, setPostTemperatura);
 }
@@ -82,7 +100,8 @@ void loop() {
     getEstadoSwitch();
     // se genera tick para el Timer
     timer.tick();
-
+    // Loop del WebSocket
+    webSocket.loop();
     // por lo pronto no se utiliza queda solo como referencia el deepSleep
     // Se duerme un minuto
     //ESP.deepSleep(60e6);   
@@ -167,4 +186,44 @@ int temperatura() {
  
     float temperature = 1.0/(log(R/R0)/B+1/298.15)-273.15; // convert to temperature via datasheet
     return temperature;
+}
+
+
+// Evento del WebSocket
+void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+
+  switch(type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[WSc] Disconnected!\n");
+      break;
+    case WStype_CONNECTED: {
+      Serial.printf("[WSc] Connected to url: %s\n", payload);
+
+      // send message to server when Connected
+      webSocket.sendTXT("Connected");
+    }
+      break;
+    case WStype_TEXT:
+      Serial.printf("[WSc] get text: %s\n", payload);
+
+      // send message to server
+      // webSocket.sendTXT("message here");
+      break;
+    case WStype_BIN:
+      Serial.printf("[WSc] get binary length: %u\n", length);
+      hexdump(payload, length);
+
+      // send data to server
+      // webSocket.sendBIN(payload, length);
+      break;
+        case WStype_PING:
+            // pong will be send automatically
+            Serial.printf("[WSc] get ping\n");
+            break;
+        case WStype_PONG:
+            // answer to a ping we send
+            Serial.printf("[WSc] get pong\n");
+            break;
+    }
+
 }
