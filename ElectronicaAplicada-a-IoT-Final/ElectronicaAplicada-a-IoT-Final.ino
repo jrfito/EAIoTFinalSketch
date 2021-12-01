@@ -4,11 +4,9 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
-#include <arduino-timer.h>
-
-
+// Librerías adicionales
 #include <math.h>
-
+#include <arduino-timer.h>
 #include <ArduinoJson.h>
 
 // Sensor temperatura v1.2 Grove
@@ -16,12 +14,15 @@ const int B = 4275;               // B value of the thermistor
 const int R0 = 100000;            // R0 = 100k
 const int pinTempSensor = A0;     // Grove - Temperature Sensor connect to A0
 
+// Pin Led o Switch
 const int pinLed = D2;
 
-const int timeDelayForPostTemperatura = 300000;
-
+// Delay de cada cuando se envia la temperatura
+const int timeDelayForPostTemperatura = 300000; // 5 Minutos
+// Se crea el Timer para el post de la Temperatura
 auto timer = timer_create_default();
 
+// Por lo pronto el deepSleep no se utiliza se queda comenta para posterior referencia
 // Para utilizar ESP.deepSleep()
 // se debe de conectar el rst al D0 del nodemcu esp8266
 
@@ -34,6 +35,8 @@ String urlGet="http://iot-rudy.softpak.com.mx/api/dispositivo/1";
 String device="Sensor Temperatura 1";
 // Variable para la temperatura
 int temp;
+
+WiFiClient client;
 
 
 void setup() {
@@ -66,9 +69,7 @@ void setup() {
         //if you get here you have connected to the WiFi    
         Serial.println("connected...");
     }
-
     // Aquí ya se conecto el esp8266
-
     
    // Se declara el Pin D2 como de salida
    pinMode(pinLed, OUTPUT);
@@ -78,40 +79,82 @@ void setup() {
 }
 
 void loop() {
-    
-  WiFiClient client;
+    getEstadoSwitch();
+    // se genera tick para el Timer
+    timer.tick();
+
+    // por lo pronto no se utiliza queda solo como referencia el deepSleep
+    // Se duerme un minuto
+    //ESP.deepSleep(60e6);   
+}
+
+// Funcion que lee el estado del Switch -  Led
+bool getEstadoSwitch(){
   // Se crea la instacia de la clase HTTPClient
   HTTPClient http; //Creamos el objeto del tipo HTTPClient
   http.useHTTP10(true);
   // Se inicia el objeto con la URL del EndPoint
   http.begin(client,urlGet);
     
+  // Header del Get en este caso es Json
+  http.addHeader("Content-Type", "application/json");
+    
+  int httpCode=http.GET();
+  //Respuesta del Servidor
+  String respuesta=http.getString(); 
+  if(httpCode == 200){     
+    DynamicJsonDocument resp(1024);
+    // De sdesrializa el Json
+    deserializeJson(resp, respuesta );
+    //Serial.println("Encendido: "+ resp["encendido"].as<String>());
+    // El resultado del Get se aplica al pin del Led
+    digitalWrite(pinLed, resp["encendido"].as<boolean>());
+  }
+  //Se imprimen las respuestas
+  //Serial.println("httpCode: "+String(httpCode)); 
+  //Serial.println("respuesta: "+respuesta);
+  //Se termina la comunicación
+  http.end(); 
+
+  return true;
+}
+
+bool setPostTemperatura(void *){
+  //WiFiClient client;
+  HTTPClient http; //Creamos el objeto del tipo HTTPClient
+  http.useHTTP10(true);
+  // Se inicia el objeto con la URL del EndPoint
+  http.begin(client,url); 
   // Header del Post en este caso es Json
   http.addHeader("Content-Type", "application/json");
     
-    int httpCode=http.GET();
-    //Respuesta del Servidor
-    String respuesta=http.getString(); 
-    if(httpCode == 200){
-      
-      DynamicJsonDocument resp(1024);
-      deserializeJson(resp, respuesta );
-      Serial.println("Encendido: "+ resp["encendido"].as<String>());
-      digitalWrite(pinLed, resp["encendido"].as<boolean>());
-      
-    }
+  // Se asigna el valor que se postea
+  temp = int(temperatura());
+  
+  // Se arama la cadena del Json "payload" como cadenas
+  // El armado del Json por cadena ya no se utiliza
+  // String postData="{\"dispositivo\":\""+device+"\",\"temperatura\":"+String(temp)+"}";
 
+  // Ahora se utiliza Librería arduinoJson.h
+  DynamicJsonDocument payloadJson(1024);
 
-    //Se imprimen las respuestas
-    Serial.println("httpCode: "+String(httpCode)); 
-    Serial.println("respuesta: "+respuesta);
-
-    //Se termina la comunicación
-    http.end(); 
-
-    timer.tick();
-    // Se duerme un minuto
-    //ESP.deepSleep(60e6);   
+  payloadJson["dispositivo"]= device;
+  payloadJson["temperatura"]= temp;
+  String postData;
+  serializeJson(payloadJson, postData);
+  // Serial.println(postData);
+  // Hasta es donde se arma el Json
+    
+  //Se envia por método POST y se guarda la respuesta 200=OK -1=ERROR
+  int httpCode=http.POST(postData);
+  //Respuesta del Servidor
+  String respuesta=http.getString();
+  //Se imprimen las respuestas
+  // Serial.println("httpCode: "+String(httpCode)); 
+  // Serial.println("respuesta: "+respuesta);
+  //Se termina la comunicación
+  http.end();
+  return true; 
 }
 
 // Función que calcula la temperatura del sensor Grove v1.2 NTC
@@ -123,35 +166,5 @@ int temperatura() {
     R = R0*R;
  
     float temperature = 1.0/(log(R/R0)/B+1/298.15)-273.15; // convert to temperature via datasheet
- 
-    Serial.print("temperature = ");
-    Serial.println(temperature);    
     return temperature;
-}
-
-bool setPostTemperatura(void *){
-  WiFiClient client;
-  HTTPClient httpB; //Creamos el objeto del tipo HTTPClient
-  httpB.useHTTP10(true);
-  // Se inicia el objeto con la URL del EndPoint
-  httpB.begin(client,url); 
-  // Header del Post en este caso es Json
-  httpB.addHeader("Content-Type", "application/json");
-    
-  // Se asigna el valor que se postea
-  temp = int(temperatura());
-    
-  // Se arama la cadena del Json "payload"
-  String postData="{\"dispositivo\":\""+device+"\",\"temperatura\":"+String(temp)+"}";
-    
-  //Se envia por método POST y se guarda la respuesta 200=OK -1=ERROR
-  int httpCode=httpB.POST(postData);
-  //Respuesta del Servidor
-  String respuesta=httpB.getString();
-  //Se imprimen las respuestas
-  Serial.println("httpCode: "+String(httpCode)); 
-  Serial.println("respuesta: "+respuesta);
-  //Se termina la comunicación
-  httpB.end();
-  return true; 
 }
