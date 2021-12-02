@@ -8,7 +8,7 @@
 #include <math.h>
 #include <arduino-timer.h> // https://github.com/contrem/arduino-timer
 #include <ArduinoJson.h>  // https://arduinojson.org/
-#include <WebSocketsClient.h> 
+
 
 // Sensor temperatura v1.2 Grove
 const int B = 4275;               // B value of the thermistor
@@ -19,9 +19,11 @@ const int pinTempSensor = A0;     // Grove - Temperature Sensor connect to A0
 const int pinLed = D2;
 
 // Delay de cada cuando se envia la temperatura
-const int timeDelayForPostTemperatura = 300000; // 5 Minutos
+const int timeDelayForPostTemperatura = 120000; // 2 Minutos
+const int timeDelayGetEstadoSwitch = 2000; // 2 Minutos
 // Se crea el Timer para el post de la Temperatura
-auto timer = timer_create_default();
+// auto timer = timer_create_default();
+Timer<2> timer;
 
 // Por lo pronto el deepSleep no se utiliza se queda comenta para posterior referencia
 // Para utilizar ESP.deepSleep()
@@ -39,9 +41,6 @@ int temp;
 
 // Cliente del WiFi
 WiFiClient client;
-// Cliente del WebSocket
-WebSocketsClient webSocket;
-
 
 void setup() {
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -77,38 +76,24 @@ void setup() {
     
    // Se declara el Pin D2 como de salida
    pinMode(pinLed, OUTPUT);
-
-   // Inicia WebSockets
-   // server address, port and URL
-   webSocket.begin("http://iot-rudy.softpak.com.mx",80,"/temperaturaHub/?formatType=pipe");
-   // event handler
-   webSocket.onEvent(webSocketEvent);
-   // try ever 5000 again if connection has failed
- webSocket.setReconnectInterval(5000);
-  
-  // start heartbeat (optional)
-  // ping server every 15000 ms
-  // expect pong from server within 3000 ms
-  // consider connection disconnected if pong is not received 2 times
-  webSocket.enableHeartbeat(15000, 3000, 2);
-  
+   
    // Timer para enviar al srver la lectura de la temperatura
    timer.every(timeDelayForPostTemperatura, setPostTemperatura);
+   timer.every(timeDelayGetEstadoSwitch, getEstadoSwitch);
 }
 
 void loop() {
-    getEstadoSwitch();
+    //getEstadoSwitch();
     // se genera tick para el Timer
     timer.tick();
-    // Loop del WebSocket
-    webSocket.loop();
+
     // por lo pronto no se utiliza queda solo como referencia el deepSleep
     // Se duerme un minuto
     //ESP.deepSleep(60e6);   
 }
 
 // Funcion que lee el estado del Switch -  Led
-bool getEstadoSwitch(){
+bool getEstadoSwitch(void *){
   // Se crea la instacia de la clase HTTPClient
   HTTPClient http; //Creamos el objeto del tipo HTTPClient
   http.useHTTP10(true);
@@ -150,7 +135,7 @@ bool setPostTemperatura(void *){
   // Se asigna el valor que se postea
   temp = int(temperatura());
   
-  // Se arama la cadena del Json "payload" como cadenas
+  // Se arma la cadena del Json "payload" como cadenas
   // El armado del Json por cadena ya no se utiliza
   // String postData="{\"dispositivo\":\""+device+"\",\"temperatura\":"+String(temp)+"}";
 
@@ -186,44 +171,4 @@ int temperatura() {
  
     float temperature = 1.0/(log(R/R0)/B+1/298.15)-273.15; // convert to temperature via datasheet
     return temperature;
-}
-
-
-// Evento del WebSocket
-void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
-
-  switch(type) {
-    case WStype_DISCONNECTED:
-      Serial.printf("[WSc] Disconnected!\n");
-      break;
-    case WStype_CONNECTED: {
-      Serial.printf("[WSc] Connected to url: %s\n", payload);
-
-      // send message to server when Connected
-      webSocket.sendTXT("Connected");
-    }
-      break;
-    case WStype_TEXT:
-      Serial.printf("[WSc] get text: %s\n", payload);
-
-      // send message to server
-      // webSocket.sendTXT("message here");
-      break;
-    case WStype_BIN:
-      Serial.printf("[WSc] get binary length: %u\n", length);
-      hexdump(payload, length);
-
-      // send data to server
-      // webSocket.sendBIN(payload, length);
-      break;
-        case WStype_PING:
-            // pong will be send automatically
-            Serial.printf("[WSc] get ping\n");
-            break;
-        case WStype_PONG:
-            // answer to a ping we send
-            Serial.printf("[WSc] get pong\n");
-            break;
-    }
-
 }
