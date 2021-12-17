@@ -30,8 +30,6 @@ Timer<2> timer;
 // se debe de conectar el rst al D0 del nodemcu esp8266
 
 // URL del Endpoint que postea la temperatura 
-//String url="http://192.168.1.88:9000/api/temperatura"; 
-//String urlGet="http://192.168.1.88:9000/api/dispositivo/1";
 String url="http://iot-rudy.softpak.com.mx/api/temperatura";
 String urlGet="http://iot-rudy.softpak.com.mx/api/dispositivo/1";
 // Nombre del Dispositivo
