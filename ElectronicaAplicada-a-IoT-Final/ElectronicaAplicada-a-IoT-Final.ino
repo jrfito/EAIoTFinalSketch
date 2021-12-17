@@ -38,6 +38,7 @@ String urlGet="http://iot-rudy.softpak.com.mx/api/dispositivo/1";
 String device="Sensor Temperatura 1";
 // Variable para la temperatura
 int temp;
+int oldTemp;
 
 // Cliente del WiFi
 WiFiClient client;
@@ -124,40 +125,44 @@ bool getEstadoSwitch(void *){
 }
 
 bool setPostTemperatura(void *){
-  //WiFiClient client;
-  HTTPClient http; //Creamos el objeto del tipo HTTPClient
-  http.useHTTP10(true);
-  // Se inicia el objeto con la URL del EndPoint
-  http.begin(client,url); 
-  // Header del Post en este caso es Json
-  http.addHeader("Content-Type", "application/json");
-    
   // Se asigna el valor que se postea
   temp = int(temperatura());
-  
-  // Se arma la cadena del Json "payload" como cadenas
-  // El armado del Json por cadena ya no se utiliza
-  // String postData="{\"dispositivo\":\""+device+"\",\"temperatura\":"+String(temp)+"}";
-
-  // Ahora se utiliza Librería arduinoJson.h
-  DynamicJsonDocument payloadJson(1024);
-
-  payloadJson["dispositivo"]= device;
-  payloadJson["temperatura"]= temp;
-  String postData;
-  serializeJson(payloadJson, postData);
-  // Serial.println(postData);
-  // Hasta es donde se arma el Json
+  if(oldTemp != temp){
+    oldTemp = temp;
+    //WiFiClient client;
+    HTTPClient http; //Creamos el objeto del tipo HTTPClient
+    http.useHTTP10(true);
+    // Se inicia el objeto con la URL del EndPoint
+    http.begin(client,url); 
+    // Header del Post en este caso es Json
+    http.addHeader("Content-Type", "application/json");
+      
     
-  //Se envia por método POST y se guarda la respuesta 200=OK -1=ERROR
-  int httpCode=http.POST(postData);
-  //Respuesta del Servidor
-  String respuesta=http.getString();
-  //Se imprimen las respuestas
-  // Serial.println("httpCode: "+String(httpCode)); 
-  // Serial.println("respuesta: "+respuesta);
-  //Se termina la comunicación
-  http.end();
+    
+    // Se arma la cadena del Json "payload" como cadenas
+    // El armado del Json por cadena ya no se utiliza
+    // String postData="{\"dispositivo\":\""+device+"\",\"temperatura\":"+String(temp)+"}";
+    
+    // Ahora se utiliza Librería arduinoJson.h
+    DynamicJsonDocument payloadJson(1024);
+  
+    payloadJson["dispositivo"]= device;
+    payloadJson["temperatura"]= temp;
+    String postData;
+    serializeJson(payloadJson, postData);
+    // Serial.println(postData);
+    // Hasta es donde se arma el Json
+      
+    //Se envia por método POST y se guarda la respuesta 200=OK -1=ERROR
+    int httpCode=http.POST(postData);
+    //Respuesta del Servidor
+    String respuesta=http.getString();
+    //Se imprimen las respuestas
+    // Serial.println("httpCode: "+String(httpCode)); 
+    // Serial.println("respuesta: "+respuesta);
+    //Se termina la comunicación
+    http.end();
+  }
   return true; 
 }
 
